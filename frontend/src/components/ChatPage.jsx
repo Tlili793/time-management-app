@@ -377,8 +377,6 @@ export default function ChatPage() {
     if (p && !hasFired.current) {
       hasFired.current = true;
       sendMessage(p);
-    }
-  }, [location.state]); // eslint-disable-line react-hooks/exhaustive-deps
       // Clear state so prompt doesn't fire again on re-renders/mounts
       navigate(location.pathname, { replace: true, state: {} });
     }
