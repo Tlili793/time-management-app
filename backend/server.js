@@ -20,7 +20,8 @@ app.use(cors({
   origin: [
     "https://time-management-88h6ijue5-mohamed-wassim-tlilis-projects.vercel.app",
     "https://time-management-app-pi.vercel.app",
-    "http://localhost:5173"
+    "http://localhost:5173",
+    "http://localhost:5175"
   ],
   credentials: true
 }));
