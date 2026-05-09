@@ -245,36 +245,6 @@ function BackIcon() {
   );
 }
 
-function MicIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-      <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-      <line x1="12" y1="19" x2="12" y2="23"/>
-      <line x1="8" y1="23" x2="16" y2="23"/>
-    </svg>
-  );
-}
-
-function SpeakerIcon({ muted }) {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-      {muted ? (
-        <line x1="23" y1="9" x2="17" y2="15"/>
-      ) : (
-        <>
-          <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
-          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
-        </>
-      )}
-      {muted && <line x1="17" y1="9" x2="23" y2="15"/>}
-    </svg>
-  );
-}
-
 const SUGGESTIONS = [
   "Plan my university work",
   "Organize my MVP tasks",
@@ -292,64 +262,54 @@ export default function ChatPage() {
   const [messages, setMessages] = useState([]);
   const [input, setInput]     = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  const [isListening, setIsListening] = useState(false);
-  const [voiceEnabled, setVoiceEnabled] = useState(() => {
-    const saved = localStorage.getItem("voice-tts-enabled");
-    return saved === "true"; // Default to false if null/not found
-  });
+  const [clearing, setIsClearing] = useState(false);
 
   const theme  = useMemo(() => buildTheme(mode), [mode]);
   const styles = useMemo(() => makeStyles(mode), [mode]);
   const bottomRef   = useRef(null);
   const textareaRef = useRef(null);
-
-  // ─── TTS / STT Setup ────────────────────────────────────────────────────────
-  const speak = (text) => {
-    if (!voiceEnabled) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text.replace(/<[^>]*>?/gm, ""));
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
-    window.speechSynthesis.speak(utterance);
-  };
-
-  const startListening = () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert("Speech recognition is not supported in this browser.");
-      return;
-    }
-    const recognition = new SpeechRecognition();
-    recognition.lang = "en-US";
-    recognition.interimResults = false;
-
-    recognition.onstart = () => setIsListening(true);
-    recognition.onend = () => setIsListening(false);
-    recognition.onerror = () => setIsListening(false);
-    recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
-      setInput(transcript);
-      // Auto-send if it's a clear command
-      if (transcript.length > 3) {
-        sendMessage(transcript);
-      }
-    };
-    recognition.start();
-  };
+  const hasFired    = useRef(false);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
 
-  // Fire initial prompt if navigated from Home with state
-  const hasFired = useRef(false);
+  // Check memory and reset if > 3 turns (6 messages)
   useEffect(() => {
+    const checkAndResetMemory = async () => {
+      try {
+        const resp = await api.get("/ai/memory");
+        const conversation = resp.data?.conversation || [];
+        // If history > 3 turns (6 messages), auto-reset
+        if (conversation.length > 6) {
+          console.log("Memory > 3 turns, resetting...");
+          await api.delete("/ai/memory");
+          setMessages([]);
+        } else {
+          // Sync messages if they exist
+          if (conversation.length > 0) {
+            const formatted = conversation.map(m => ({
+              role: m.role,
+              content: m.content,
+              time: new Date()
+            }));
+            setMessages(formatted);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to check memory:", err);
+      }
+    };
+    checkAndResetMemory();
+  }, []);
+
+  // Fire initial prompt if navigated from Home with state
+  useEffect(() => {
+    if (hasFired.current) return;
     const p = location.state?.prompt;
-    if (p && !hasFired.current) {
+    if (p) {
       hasFired.current = true;
       sendMessage(p);
-      // Clear state so prompt doesn't fire again on re-renders/mounts
-      navigate(location.pathname, { replace: true, state: {} });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -357,15 +317,6 @@ export default function ChatPage() {
     const next = mode === "light" ? "dark" : "light";
     setMode(next);
     localStorage.setItem("theme-mode", next);
-  };
-
-  const toggleVoice = () => {
-    const next = !voiceEnabled;
-    setVoiceEnabled(next);
-    localStorage.setItem("voice-tts-enabled", next);
-    if (!next) {
-      window.speechSynthesis.cancel();
-    }
   };
 
   const sendMessage = async (overrideText) => {
@@ -393,15 +344,12 @@ export default function ChatPage() {
       const reply = data.explanation || data.answer || data.message || JSON.stringify(data);
 
       setMessages((prev) => [...prev, { role: "assistant", content: reply, time: new Date() }]);
-      speak(reply);
     } catch (err) {
       console.error("Chat error:", err);
-      const errMsg = "Something went wrong. Please try again.";
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: errMsg, time: new Date() },
+        { role: "assistant", content: "Something went wrong. Please try again.", time: new Date() },
       ]);
-      speak(errMsg);
     } finally {
       setIsTyping(false);
     }
@@ -502,39 +450,15 @@ export default function ChatPage() {
         {/* Input */}
         <div className="chat-input-area">
           <div className="chat-input-inner">
-            <button 
-              className="btn-theme" 
-              onClick={toggleVoice}
-              title={voiceEnabled ? "Disable Text-to-Speech" : "Enable Text-to-Speech"}
-              style={{ width: 80, height: 42, borderRadius: 12, fontSize: '11px', fontWeight: 'bold' }}
-            >
-              {voiceEnabled ? "TTS ON" : "TTS OFF"}
-            </button>
             <textarea
               ref={textareaRef}
               className="chat-textarea"
               rows={1}
-              placeholder={isListening ? "Listening..." : "Ask me anything..."}
+              placeholder="Ask me anything about your tasks…"
               value={input}
               onChange={handleInput}
               onKeyDown={handleKeyDown}
             />
-            <button
-              className={`btn-send ${isListening ? 'active' : ''}`}
-              onClick={startListening}
-              title="Voice Input"
-              style={{ 
-                background: isListening ? '#f87171' : 'transparent', 
-                color: isListening ? '#fff' : 'inherit', 
-                border: '0.5px solid rgba(0,0,0,0.1)',
-                width: 'auto',
-                padding: '0 12px',
-                fontSize: '11px',
-                fontWeight: 'bold'
-              }}
-            >
-              {isListening ? "STOP" : "VOICE"}
-            </button>
             <button
               className="btn-send"
               onClick={() => sendMessage()}
