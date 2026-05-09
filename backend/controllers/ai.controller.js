@@ -5,9 +5,9 @@ import {
   getMemory,
   deleteMemory
 } from "../services/ai.service.js";
-import redis from "../utils/redis.client.js"; // use the one with host/port set
+import redis from "../utils/memory.client.js"; // use the one with host/port set
 import axios from "axios";
-const FASTAPI_URL = process.env.FASTAPI_URL; // points to FastAPI container
+const FASTAPI_URL = process.env.FASTAPI_URL || "http://127.0.0.1:8000";
 export const getIntent = async (req,res) => {
   
 }

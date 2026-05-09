@@ -1,31 +1,15 @@
 version: "3.9"
 
 services:
-  redis:
-    image: redis:7-alpine
-    container_name: redis
-    ports:
-      - "6379:6379"   # optional if you want host access
-    volumes:
-      - redis-data:/data
-    command: ["redis-server", "--appendonly", "yes"]
-    networks:
-      - app-network
-
   fastapi:
     build:
       context: ./api
       dockerfile: Dockerfile
     container_name: fastapi
     environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=
       - FASTAPI_URL=http://fastapi:8000
     networks:
       - app-network
-    depends_on:
-      - redis
 
   express:
     build:
@@ -36,17 +20,10 @@ services:
       - "5000:5000"  # frontend communicates with this
     environment:
       - FASTAPI_URL=http://fastapi:8000
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=
     networks:
       - app-network
     depends_on:
       - fastapi
-      - redis
-
-volumes:
-  redis-data:
 
 networks:
   app-network:

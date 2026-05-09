@@ -1,28 +1,13 @@
 version: "3.4"
 
 services:
-  redis:
-    image: redis:7-alpine
-    container_name: redis
-    volumes:
-      - redis-data:/data
-    command: ["redis-server", "--appendonly", "yes"]
-    networks:
-      - app-network
-    restart: unless-stopped
-
   fastapi:
     image: mohamedwassim123564/time-management-fastapi:latest
     container_name: fastapi
     environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=
       - FASTAPI_URL=http://fastapi:8000
     networks:
       - app-network
-    depends_on:
-      - redis
     restart: unless-stopped
 
   express:
@@ -32,18 +17,11 @@ services:
       - "5000:5000"
     environment:
       - FASTAPI_URL=http://fastapi:8000
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=
     networks:
       - app-network
     depends_on:
       - fastapi
-      - redis
     restart: unless-stopped
-
-volumes:
-  redis-data:
 
 networks:
   app-network:

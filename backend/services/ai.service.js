@@ -1,7 +1,7 @@
 import axios from "axios";
 import Session from "../models/session.model.js";
-const FASTAPI_URL = "http://127.0.0.1:8000";
-import redis from "../utils/redis.client.js";
+const FASTAPI_URL = process.env.FASTAPI_URL || "http://127.0.0.1:8000";
+import redis from "../utils/memory.client.js";
 
   // Start plan
 export const startPlanService = async (tasks, project) => {
